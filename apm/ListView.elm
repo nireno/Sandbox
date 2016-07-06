@@ -12,143 +12,173 @@ import HttpBuilder
 import String
 import ShortcutKeys exposing (..)
 import Keyboard
+import Dict
+import Maybe exposing (withDefault)
 
 main =
   Html.program
-    { init = init "http://localhost:3000/project"
+    { init = init getter
     , view = view
     , update = update
     , subscriptions = subscriptions
     }
 
-init thingUrl = (
-    { things = []
-    , newThingName = ""
-    , selectedThingId = 0
-    , prevSelectedThingId = 0
-    , thingUrl = thingUrl
+getter = 
+    { url = "http://localhost:3000/project?select=id,name"
+    , fields = ["id", "name"]
+    , prettyFields = ["ID", "Name"]
     }
-    , cmdGetThings thingUrl)
 
+init getter = 
+    (
+        { things = []
+        , newThingName = ""
+        , selectedThingId = 0
+        , prevSelectedThingId = 0
+        , getter = getter
+        }
+    , cmdGetThings getter.fields getter.url
+    )
 
 type Msg
   = FetchSucceed (List Thing)
   | FetchFail Http.Error
-  | Change String
-  | PostSucceed Http.Response
-  | PostFail Http.RawError
-  | KeyUp Int
-  | SelectThing Int
-  | DeleteSucceed Http.Response
-  | DeleteKey
-  | OtherKey
+  --| Change String
+  --| PostSucceed Http.Response
+  --| PostFail Http.RawError
+  --| KeyUp Int
+  --| SelectThing Int
+  --| DeleteSucceed Http.Response
+  --| DeleteKey
+  --| OtherKey
 
 type alias Model =
     { things : List Thing
     , newThingName : String
     , selectedThingId : Int
     , prevSelectedThingId : Int
-    , thingUrl: String
+    , getter: 
+        { url: String
+        , fields: List String
+        , prettyFields : List String
+        }
     }
 
-type alias Thing =
-    { id : Int
-    , name : String
-    }
+type alias Thing = List String
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update action model =
   case action of
-    FetchSucceed things -> ({ model | things = things }, Cmd.none)
+    FetchSucceed things -> ({ model | things = things}, Cmd.none)
     FetchFail _ -> (model, Cmd.none)
-    Change str -> ({ model | newThingName = str }, Cmd.none)
-    PostSucceed _ -> (model, cmdGetThings model.thingUrl)
-    PostFail _-> (model, Cmd.none)
-    DeleteSucceed _ -> ({ model | selectedThingId = nextThingId model.things model.selectedThingId}, cmdGetThings model.thingUrl)
-    KeyUp keycode ->
-            if keycode == enterKeycode && String.length model.newThingName > 0 then
-                ({ model | newThingName = "" }, cmdPostThing model.thingUrl model.newThingName)
-            else (model, Cmd.none)
-    SelectThing thingId ->
-        (
-            { model | prevSelectedThingId = model.selectedThingId, selectedThingId = thingId
-            }
-            , Cmd.none
-        )
-    DeleteKey ->
-        (model, cmdDeleteThing model.thingUrl model.selectedThingId)
-    OtherKey ->
-        (model, Cmd.none)
+    --Change str -> ({ model | newThingName = str }, Cmd.none)
+    --PostSucceed _ -> (model, cmdGetThings model.thingUrl)
+    --PostFail _-> (model, Cmd.none)
+    --DeleteSucceed _ -> ({ model | selectedThingId = nextThingId model.things model.selectedThingId}, cmdGetThings model.thingUrl)
+    --KeyUp keycode ->
+    --        if keycode == enterKeycode && String.length model.newThingName > 0 then
+    --            ({ model | newThingName = "" }, cmdPostThing model.thingUrl model.newThingName)
+    --        else (model, Cmd.none)
+    --SelectThing thingId ->
+    --    (
+    --        { model | prevSelectedThingId = model.selectedThingId, selectedThingId = thingId
+    --        }
+    --        , Cmd.none
+    --    )
+    --DeleteKey ->
+    --    (model, cmdDeleteThing model.thingUrl model.selectedThingId)
+    --OtherKey ->
+    --    (model, Cmd.none)
 
 
 view : Model -> Html Msg
 view model =
     let listItemAttribs thingId =
-        [ onClick (SelectThing thingId)
-        , style
+        [ {-onClick (SelectThing thingId)
+        , -}style
             [ ("cursor", "pointer")
             , if thingId == model.selectedThingId then ("color", "red") else ("color", "black")
             ]
         ]
     in
         div []
-            [ input (inputAttribs model) []
-            , ul [] (List.map (\thing -> li (listItemAttribs thing.id) [text thing.name]) model.things )
+            [ table []
+                ( tr [] (List.map (\prettyField -> th [] [text prettyField]) model.getter.prettyFields) :: List.map
+                    (\thing -> 
+                        tr [] (List.map (\field -> td [] [text field]) thing) )
+                    model.things
+                )
+            --, input (inputAttribs model) []
+            --, ul [] (List.map (\thing -> li (listItemAttribs thing.id) [text thing.name]) model.things )
             ]
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Keyboard.ups (\ keycode -> if keycode == deleteKeycode then DeleteKey else OtherKey) 
+    Sub.none
+    --Keyboard.ups (\ keycode -> if keycode == deleteKeycode then DeleteKey else OtherKey) 
 
 inputAttribs model =
     [ placeholder "Create new item..."
     , Html.Attributes.value model.newThingName
-    , onInput Change
-    , onKeyUp (\keyCode -> KeyUp keyCode)
+    --, onInput Change
+    --, onKeyUp (\keyCode -> KeyUp keyCode)
     , autofocus True
     ]
 
-onKeyUp : (Int -> msg) -> Attribute msg
-onKeyUp tagger =
-  on "keyup" (Json.Decode.map tagger keyCode)
+--onKeyUp : (Int -> msg) -> Attribute msg
+--onKeyUp tagger =
+--  on "keyup" (Json.Decode.map tagger keyCode)
 
 
-cmdGetThings : String -> Cmd Msg
-cmdGetThings url =
-    Task.perform FetchFail FetchSucceed (Http.get thingsDecoder (url ++ "?select=id,name"))
+--cmdGetThings : String -> Cmd Msg
+--cmdGetThings =
+--    Task.perform FetchFail FetchSucceed (Http.get thingsDecoder (url ++ "?select=id,name"))
 
-cmdPostThing : String -> String -> Cmd Msg
-cmdPostThing url thingName =
-    Task.perform PostFail PostSucceed (postThing url thingName)
+cmdGetThings : List String -> String -> Cmd Msg
+cmdGetThings fields url =
+    let
+        stringify a = toString a
+        something = 
+            Json.Decode.oneOf 
+            [ Json.Decode.string
+            , Json.Decode.map stringify Json.Decode.int
+            ]
 
-thingsDecoder =
-    Json.Decode.list
-        ( Json.Decode.object2 Thing ("id" := Json.Decode.int) ("name" := Json.Decode.string))
+        dictToList = Json.Decode.map (\d -> List.map (\f -> withDefault "?" (Dict.get f d)) fields) (Json.Decode.dict something)
+        decoder = Json.Decode.list (dictToList)
+    in
+        Task.perform FetchFail FetchSucceed (Http.get decoder url)
+
+--cmdPostThing : String -> String -> Cmd Msg
+--cmdPostThing url thingName =
+--    Task.perform PostFail PostSucceed (postThing url thingName)
+
+
 
 jsonifyThing name =
     Json.Encode.object [("name", Json.Encode.string name )]
         |> Json.Encode.encode 0
         |> Http.string
 
-postThing url thingName =
-    Http.send Http.defaultSettings
-        { verb = "POST"
-        , headers = [("Content-Type", "application/json")]
-        , url = url
-        , body = jsonifyThing thingName
-        }
+--postThing url thingName =
+--    Http.send Http.defaultSettings
+--        { verb = "POST"
+--        , headers = [("Content-Type", "application/json")]
+--        , url = url
+--        , body = jsonifyThing thingName
+--        }
 
-deleteThing url thingId =
-    Http.send Http.defaultSettings
-        { verb = "DELETE"
-        , headers = [("Content-Type", "application/json")]
-        , url = url
-        , body = Http.string ""
-        }
+--deleteThing url thingId =
+--    Http.send Http.defaultSettings
+--        { verb = "DELETE"
+--        , headers = [("Content-Type", "application/json")]
+--        , url = url
+--        , body = Http.string ""
+--        }
 
-cmdDeleteThing : String -> Int -> Cmd Msg
-cmdDeleteThing url thingId =
-    Task.perform PostFail DeleteSucceed (deleteThing url thingId)
+--cmdDeleteThing : String -> Int -> Cmd Msg
+--cmdDeleteThing url thingId =
+--    Task.perform PostFail DeleteSucceed (deleteThing url thingId)
 
 -- return the thing in the list that follows the thing with the given thingId 
 nextThingId things thingId = 

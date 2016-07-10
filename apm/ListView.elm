@@ -17,35 +17,42 @@ import Maybe exposing (withDefault)
 
 main =
   Html.program
-    { init = init getter
+    { init = init rpc_project
     , view = view
     , update = update
     , subscriptions = subscriptions
     }
 
-getter = 
-    { url = "http://localhost:3000/project?select=id,name"
+rpc_project = 
+    { url = {get = "http://localhost:3000/project?select=id,name", set = "http://localhost:3000/project"}
     , fields = ["id", "name"]
     , prettyFields = ["ID", "Name"]
     }
 
-init getter = 
+rpc_task = 
+    { url = {get = "http://localhost:3000/v_project_task?select=id,project,task", set = ""}
+    , fields = ["id", "project", "task"]
+    , prettyFields = ["ID", "Project", "Task"]
+    }
+
+init rpc = 
     (
         { things = []
         , newThingName = ""
         , selectedThingId = 0
         , prevSelectedThingId = 0
-        , getter = getter
+        , rpc = rpc
         }
-    , cmdGetThings getter.fields getter.url
+    , cmdGetThings rpc.fields rpc.url.get
     )
 
 type Msg
   = FetchSucceed (List Thing)
-  | FetchFail Http.Error
+  | XhrFail Http.Error
   --| Change String
-  --| PostSucceed Http.Response
-  --| PostFail Http.RawError
+  | PostSucceed Http.Response
+  | PostFail Http.RawError
+  | ButtonClick Thing
   --| KeyUp Int
   --| SelectThing Int
   --| DeleteSucceed Http.Response
@@ -57,11 +64,18 @@ type alias Model =
     , newThingName : String
     , selectedThingId : Int
     , prevSelectedThingId : Int
-    , getter: 
-        { url: String
+    , rpc: 
+        { url: { get: String, set: String}
         , fields: List String
         , prettyFields : List String
         }
+    }
+
+type alias Field =
+    { name: String
+    , prettyName: String
+    , encoder: String -> Json.Encode.Value
+    , editable: Bool
     }
 
 type alias Thing = List String
@@ -70,10 +84,11 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update action model =
   case action of
     FetchSucceed things -> ({ model | things = things}, Cmd.none)
-    FetchFail _ -> (model, Cmd.none)
+    XhrFail _ -> (model, Cmd.none)
     --Change str -> ({ model | newThingName = str }, Cmd.none)
-    --PostSucceed _ -> (model, cmdGetThings model.thingUrl)
-    --PostFail _-> (model, Cmd.none)
+    PostSucceed _ -> (model, Cmd.none)
+    PostFail _-> (model, Cmd.none)
+    ButtonClick inputs -> (model, cmdPostThing model.rpc.url.set model.rpc.fields inputs)
     --DeleteSucceed _ -> ({ model | selectedThingId = nextThingId model.things model.selectedThingId}, cmdGetThings model.thingUrl)
     --KeyUp keycode ->
     --        if keycode == enterKeycode && String.length model.newThingName > 0 then
@@ -103,11 +118,16 @@ view model =
     in
         div []
             [ table []
-                ( tr [] (List.map (\prettyField -> th [] [text prettyField]) model.getter.prettyFields) :: List.map
+                ( List.append 
+                    (tr [] (List.map (\prettyField -> th [] [text prettyField]) model.rpc.prettyFields) 
+                :: List.map
                     (\thing -> 
                         tr [] (List.map (\field -> td [] [text field]) thing) )
-                    model.things
+                    model.things)
+                    [tr [] (List.map (\_ -> td [] [input [] []]) model.rpc.fields)]
                 )
+            , button [onClick (ButtonClick ["", "hi"])] [text "new thing"]
+            , p [] [ jsonifyThing ["name"] ["niren"] |> toString |> text ]
             --, input (inputAttribs model) []
             --, ul [] (List.map (\thing -> li (listItemAttribs thing.id) [text thing.name]) model.things )
             ]
@@ -147,26 +167,32 @@ cmdGetThings fields url =
         dictToList = Json.Decode.map (\d -> List.map (\f -> withDefault "?" (Dict.get f d)) fields) (Json.Decode.dict something)
         decoder = Json.Decode.list (dictToList)
     in
-        Task.perform FetchFail FetchSucceed (Http.get decoder url)
+        Task.perform XhrFail FetchSucceed (Http.get decoder url)
 
---cmdPostThing : String -> String -> Cmd Msg
---cmdPostThing url thingName =
---    Task.perform PostFail PostSucceed (postThing url thingName)
+jsonifyThing: List String -> Thing -> Http.Body
+jsonifyThing fields thing =
+    let 
+        encodedThing = List.map Json.Encode.string thing
+    in
+        Json.Encode.object (List.map2 (,) fields encodedThing)
+            |> Json.Encode.encode 0
+            |> Http.string
+
+postThing url fields thing =
+    Http.send Http.defaultSettings
+        { verb = "POST"
+        , headers = [("Content-Type", "application/json")]
+        , url = url
+        , body = jsonifyThing fields thing
+        }
+
+cmdPostThing : String -> List String -> Thing -> Cmd Msg
+cmdPostThing url fields thing =
+    Task.perform PostFail PostSucceed (postThing url fields thing)
 
 
 
-jsonifyThing name =
-    Json.Encode.object [("name", Json.Encode.string name )]
-        |> Json.Encode.encode 0
-        |> Http.string
 
---postThing url thingName =
---    Http.send Http.defaultSettings
---        { verb = "POST"
---        , headers = [("Content-Type", "application/json")]
---        , url = url
---        , body = jsonifyThing thingName
---        }
 
 --deleteThing url thingId =
 --    Http.send Http.defaultSettings

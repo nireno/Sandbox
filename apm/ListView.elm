@@ -135,37 +135,85 @@ update action model =
 
 view : Model -> Html Msg
 view model =
-    let listItemAttribs recordId =
-        [ {-onClick (SelectRecord recordId)
-        , -}style
-            [ ("cursor", "pointer")
-            , if recordId == model.selectedRecordId then ("color", "red") else ("color", "black")
+    let 
+        listItemAttribs recordId =
+            [ {-onClick (SelectRecord recordId)
+            , -}style
+                [ ("cursor", "pointer")
+                , if recordId == model.selectedRecordId then ("color", "red") else ("color", "black")
+                ]
             ]
-        ]
 
         masters = model.rpc.masters
-        prettyFields = List.map (\f -> f.prettyName) model.rpc.fields
-        getMaster masters fieldName = List.filter (\m -> m.field == fieldName) masters |> List.head |> Maybe.withDefault masterFieldTemplate
+        fields = model.rpc.fields
+        tableHeaders = List.map (\f -> f.prettyName) fields
+        getMaster : String -> Maybe MasterField
+        getMaster fieldName = List.filter (\m -> m.field == fieldName) masters |> List.head
+
         masterDropdown fieldName =
             let 
-                master = getMaster masters fieldName
+                maybeMaster = getMaster fieldName
                 msgOptionChanged val = Change fieldName val
+
                 options = 
-                    List.map 
-                        (\(id, name) -> option [value (toString id)] [text name]) 
-                        master.items
+                    case maybeMaster of
+                        Nothing -> []
+                        Just master -> 
+                            List.map 
+                                (\(id, name) -> option [value (toString id)] [text name]) 
+                                master.items
             in 
                 select [onChange msgOptionChanged] options
+
+        overlayMasters: Record -> Record
+        overlayMasters record = 
+            let 
+                getMasterVal : List (Int, String) -> Int -> String
+                getMasterVal masterItems key =
+                    List.filter (\(k, _) -> k == key) masterItems 
+                        |> List.head 
+                        |> Maybe.withDefault (key, toString key)
+                        |> \(_, val) -> val
+
+
+
+                fldnames = List.map (\f -> f.name) fields
+
+                overlayMaster : (String, String) -> String
+                overlayMaster (fieldname, key) = 
+                    case String.toInt key of
+                        Result.Err _ -> key
+                        Result.Ok i ->
+                            case getMaster fieldname of 
+                                Nothing -> key
+                                Just master ->
+                                    getMasterVal master.items i
+
+
+                fldMap = List.map2 (\name val -> (name, val)) fldnames record
+            in
+                List.map overlayMaster fldMap
     in
         div []
             [ table []
                 ( List.append 
-                    (tr [] (List.map (\prettyField -> th [] [text prettyField]) prettyFields) 
-                :: List.map
-                    (\record -> 
-                        tr [] (List.map (\field -> td [] [text field]) record) )
-                    model.records)
-                    [tr [] (List.map (\f -> td [] [if f.hasMaster then masterDropdown f.name else input [onInput (Change f.name), disabled (not f.editable)] []] ) model.rpc.fields)]
+                    ( tr [] (List.map (\header -> th [] [text header]) tableHeaders) 
+                        :: List.map
+                            (\record -> 
+                                tr [] (List.map (\str -> td [] [text str]) (overlayMasters record)) )
+                            model.records 
+                    )
+                    [ tr []
+                        ( List.map 
+                            ( \f -> td []
+                                [ if f.hasMaster 
+                                    then masterDropdown f.name 
+                                    else input [onInput (Change f.name), disabled (not f.editable)] []
+                                ]
+                            ) 
+                            model.rpc.fields
+                        )
+                    ]
                 )
             , button [onClick ButtonClick] [text "new record"]
             , div [] (List.map (\m -> p [] [text (toString m.items)]) masters)

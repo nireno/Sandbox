@@ -43,16 +43,16 @@ rpc_task =
     }
 
 init rpc = 
-        { things = []
-        , newThingName = ""
-        , selectedThingId = 0
-        , prevSelectedThingId = 0
+        { records = []
+        , newRecordName = ""
+        , selectedRecordId = 0
+        , prevSelectedRecordId = 0
         , rpc = rpc
         }
-        ! (cmdGetThings rpc.fields rpc.url.get :: List.map (\m -> cmdGetMaster m) rpc.masters)
+        ! (cmdGetRecords rpc.fields rpc.url.get :: List.map (\m -> cmdGetMaster m) rpc.masters)
 
 type Msg
-  = FetchSucceed (List Thing)
+  = FetchSucceed (List Record)
   | XhrFail Http.Error
   | Change String String
   | PostSucceed Http.Response
@@ -60,16 +60,16 @@ type Msg
   | ButtonClick
   | ReadMasterSucceed String (List (Int, String))
   --| KeyUp Int
-  --| SelectThing Int
+  --| SelectRecord Int
   --| DeleteSucceed Http.Response
   --| DeleteKey
   --| OtherKey
 
 type alias Model =
-    { things : List Thing
-    , newThingName : String
-    , selectedThingId : Int
-    , prevSelectedThingId : Int
+    { records : List Record
+    , newRecordName : String
+    , selectedRecordId : Int
+    , prevSelectedRecordId : Int
     , rpc: 
         { url: { get: String, set: String}
         , fields: List Field
@@ -94,21 +94,21 @@ type alias MasterField =
 
 masterFieldTemplate = {field = "", url = "", items = []}
 
-type alias Thing = List String
+type alias Record = List String
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update action model =
   case action of
-    FetchSucceed things -> ({ model | things = things}, Cmd.none)
+    FetchSucceed records -> ({ model | records = records}, Cmd.none)
     XhrFail _ -> (model, Cmd.none)
     Change fieldName str -> 
         let 
             fields = List.map (\f -> if f.name == fieldName then {f | value = str} else f) model.rpc.fields
         in
             ({ model | rpc = {url = model.rpc.url, fields = fields, masters = model.rpc.masters} }, Cmd.none)
-    PostSucceed _ -> (model, cmdGetThings model.rpc.fields model.rpc.url.get )
+    PostSucceed _ -> (model, cmdGetRecords model.rpc.fields model.rpc.url.get )
     PostFail _-> (model, Cmd.none)
-    ButtonClick -> (model, cmdPostThing model.rpc.url.set model.rpc.fields)
+    ButtonClick -> (model, cmdPostRecord model.rpc.url.set model.rpc.fields)
     ReadMasterSucceed fieldname pairs -> 
         let 
             masters = List.map (\m -> {m | items = if m.field == fieldname then pairs else m.items}) model.rpc.masters
@@ -116,30 +116,30 @@ update action model =
             newRpc = {rpc | masters = masters}
         in 
             ({model | rpc = newRpc}, Cmd.none)
-    --DeleteSucceed _ -> ({ model | selectedThingId = nextThingId model.things model.selectedThingId}, cmdGetThings model.thingUrl)
+    --DeleteSucceed _ -> ({ model | selectedRecordId = nextRecordId model.records model.selectedRecordId}, cmdGetRecords model.recordUrl)
     --KeyUp keycode ->
-    --        if keycode == enterKeycode && String.length model.newThingName > 0 then
-    --            ({ model | newThingName = "" }, cmdPostThing model.thingUrl model.newThingName)
+    --        if keycode == enterKeycode && String.length model.newRecordName > 0 then
+    --            ({ model | newRecordName = "" }, cmdPostRecord model.recordUrl model.newRecordName)
     --        else (model, Cmd.none)
-    --SelectThing thingId ->
+    --SelectRecord recordId ->
     --    (
-    --        { model | prevSelectedThingId = model.selectedThingId, selectedThingId = thingId
+    --        { model | prevSelectedRecordId = model.selectedRecordId, selectedRecordId = recordId
     --        }
     --        , Cmd.none
     --    )
     --DeleteKey ->
-    --    (model, cmdDeleteThing model.thingUrl model.selectedThingId)
+    --    (model, cmdDeleteRecord model.recordUrl model.selectedRecordId)
     --OtherKey ->
     --    (model, Cmd.none)
 
 
 view : Model -> Html Msg
 view model =
-    let listItemAttribs thingId =
-        [ {-onClick (SelectThing thingId)
+    let listItemAttribs recordId =
+        [ {-onClick (SelectRecord recordId)
         , -}style
             [ ("cursor", "pointer")
-            , if thingId == model.selectedThingId then ("color", "red") else ("color", "black")
+            , if recordId == model.selectedRecordId then ("color", "red") else ("color", "black")
             ]
         ]
 
@@ -162,17 +162,17 @@ view model =
                 ( List.append 
                     (tr [] (List.map (\prettyField -> th [] [text prettyField]) prettyFields) 
                 :: List.map
-                    (\thing -> 
-                        tr [] (List.map (\field -> td [] [text field]) thing) )
-                    model.things)
+                    (\record -> 
+                        tr [] (List.map (\field -> td [] [text field]) record) )
+                    model.records)
                     [tr [] (List.map (\f -> td [] [if f.hasMaster then masterDropdown f.name else input [onInput (Change f.name), disabled (not f.editable)] []] ) model.rpc.fields)]
                 )
-            , button [onClick ButtonClick] [text "new thing"]
+            , button [onClick ButtonClick] [text "new record"]
             , div [] (List.map (\m -> p [] [text (toString m.items)]) masters)
-            , div [] [text ( toString model.things) ]
-            --, p [] [ jsonifyThing ["name"] ["niren"] |> toString |> text ]
+            , div [] [text ( toString model.records) ]
+            --, p [] [ jsonifyRecord ["name"] ["niren"] |> toString |> text ]
             --, input (inputAttribs model) []
-            --, ul [] (List.map (\thing -> li (listItemAttribs thing.id) [text thing.name]) model.things )
+            --, ul [] (List.map (\record -> li (listItemAttribs record.id) [text record.name]) model.records )
             ]
 
 subscriptions : Model -> Sub Msg
@@ -182,7 +182,7 @@ subscriptions model =
 
 inputAttribs model =
     [ placeholder "Create new item..."
-    , Html.Attributes.value model.newThingName
+    , Html.Attributes.value model.newRecordName
     --, onInput Change
     --, onKeyUp (\keyCode -> KeyUp keyCode)
     , autofocus True
@@ -193,9 +193,9 @@ inputAttribs model =
 --  on "keyup" (Json.Decode.map tagger keyCode)
 
 
---cmdGetThings : String -> Cmd Msg
---cmdGetThings =
---    Task.perform FetchFail FetchSucceed (Http.get thingsDecoder (url ++ "?select=id,name"))
+--cmdGetRecords : String -> Cmd Msg
+--cmdGetRecords =
+--    Task.perform FetchFail FetchSucceed (Http.get recordsDecoder (url ++ "?select=id,name"))
 
 decodeToString = 
     let 
@@ -207,8 +207,8 @@ decodeToString =
         , Json.Decode.null "null"
         ]
 
-cmdGetThings : List Field -> String -> Cmd Msg
-cmdGetThings fields url =
+cmdGetRecords : List Field -> String -> Cmd Msg
+cmdGetRecords fields url =
     let
         fieldNames = List.map (\f -> f.name) fields
 
@@ -226,8 +226,8 @@ cmdGetMaster master =
         Task.perform XhrFail (ReadMasterSucceed master.field) (Http.get decoder master.url)
 
 
-jsonifyThing: List Field -> Http.Body
-jsonifyThing fields =
+jsonifyRecord: List Field -> Http.Body
+jsonifyRecord fields =
     let 
         editables = List.filter (\f -> f.editable) fields 
         fieldNames = List.map (\f -> f.name) editables
@@ -239,24 +239,24 @@ jsonifyThing fields =
             |> Json.Encode.encode 0
             |> Http.string
 
-postThing: String -> List Field -> Task.Task RawError Response
-postThing url fields =
+postRecord: String -> List Field -> Task.Task RawError Response
+postRecord url fields =
     Http.send Http.defaultSettings
         { verb = "POST"
         , headers = [("Content-Type", "application/json")]
         , url = url
-        , body = jsonifyThing fields
+        , body = jsonifyRecord fields
         }
 
-cmdPostThing : String -> List Field -> Cmd Msg
-cmdPostThing url fields =
-    Task.perform PostFail PostSucceed (postThing url fields)
+cmdPostRecord : String -> List Field -> Cmd Msg
+cmdPostRecord url fields =
+    Task.perform PostFail PostSucceed (postRecord url fields)
 
 
 
 
 
---deleteThing url thingId =
+--deleteRecord url recordId =
 --    Http.send Http.defaultSettings
 --        { verb = "DELETE"
 --        , headers = [("Content-Type", "application/json")]
@@ -264,19 +264,19 @@ cmdPostThing url fields =
 --        , body = Http.string ""
 --        }
 
---cmdDeleteThing : String -> Int -> Cmd Msg
---cmdDeleteThing url thingId =
---    Task.perform PostFail DeleteSucceed (deleteThing url thingId)
+--cmdDeleteRecord : String -> Int -> Cmd Msg
+--cmdDeleteRecord url recordId =
+--    Task.perform PostFail DeleteSucceed (deleteRecord url recordId)
 
--- return the thing in the list that follows the thing with the given thingId 
-nextThingId things thingId = 
+-- return the record in the list that follows the record with the given recordId 
+nextRecordId records recordId = 
     let fun ps id = 
         case ps of
             [] -> []
             hd::tl -> if hd.id == id then tl else fun tl id
 
     in 
-        case fun things thingId of
+        case fun records recordId of
             [] -> 0
             hd::tl -> hd.id
 

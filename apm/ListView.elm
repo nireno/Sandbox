@@ -60,10 +60,10 @@ type Msg
   | ButtonClick
   | ReadMasterSucceed String (List (Int, String))
   --| KeyUp Int
-  --| SelectRecord Int
-  --| DeleteSucceed Http.Response
-  --| DeleteKey
-  --| OtherKey
+  | SelectRecord (Maybe Int)
+  | DeleteSucceed Http.Response
+  | DeleteKey
+  | NoOp
 
 type alias Model =
     { records : List Record
@@ -98,39 +98,40 @@ type alias Record = List String
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update action model =
-  case action of
-    FetchSucceed records -> ({ model | records = records}, Cmd.none)
-    XhrFail _ -> (model, Cmd.none)
-    Change fieldName str -> 
-        let 
-            fields = List.map (\f -> if f.name == fieldName then {f | value = str} else f) model.rpc.fields
-        in
-            ({ model | rpc = {url = model.rpc.url, fields = fields, masters = model.rpc.masters} }, Cmd.none)
-    PostSucceed _ -> (model, cmdGetRecords model.rpc.fields model.rpc.url.get )
-    PostFail _-> (model, Cmd.none)
-    ButtonClick -> (model, cmdPostRecord model.rpc.url.set model.rpc.fields)
-    ReadMasterSucceed fieldname pairs -> 
-        let 
-            masters = List.map (\m -> {m | items = if m.field == fieldname then pairs else m.items}) model.rpc.masters
-            rpc = model.rpc
-            newRpc = {rpc | masters = masters}
-        in 
-            ({model | rpc = newRpc}, Cmd.none)
-    --DeleteSucceed _ -> ({ model | selectedRecordId = nextRecordId model.records model.selectedRecordId}, cmdGetRecords model.recordUrl)
-    --KeyUp keycode ->
-    --        if keycode == enterKeycode && String.length model.newRecordName > 0 then
-    --            ({ model | newRecordName = "" }, cmdPostRecord model.recordUrl model.newRecordName)
-    --        else (model, Cmd.none)
-    --SelectRecord recordId ->
-    --    (
-    --        { model | prevSelectedRecordId = model.selectedRecordId, selectedRecordId = recordId
-    --        }
-    --        , Cmd.none
-    --    )
-    --DeleteKey ->
-    --    (model, cmdDeleteRecord model.recordUrl model.selectedRecordId)
-    --OtherKey ->
-    --    (model, Cmd.none)
+    case action of
+        FetchSucceed records -> ({ model | records = records}, Cmd.none)
+        XhrFail _ -> (model, Cmd.none)
+        Change fieldName str -> 
+            let 
+                fields = List.map (\f -> if f.name == fieldName then {f | value = str} else f) model.rpc.fields
+            in
+                ({ model | rpc = {url = model.rpc.url, fields = fields, masters = model.rpc.masters} }, Cmd.none)
+        PostSucceed _ -> (model, cmdGetRecords model.rpc.fields model.rpc.url.get )
+        PostFail _-> (model, Cmd.none)
+        ButtonClick -> (model, cmdPostRecord model.rpc.url.set model.rpc.fields)
+        ReadMasterSucceed fieldname pairs -> 
+            let 
+                masters = List.map (\m -> {m | items = if m.field == fieldname then pairs else m.items}) model.rpc.masters
+                rpc = model.rpc
+                newRpc = {rpc | masters = masters}
+            in 
+                ({model | rpc = newRpc}, Cmd.none)
+        --DeleteSucceed _ -> ({ model | selectedRecordId = nextRecordId model.records model.selectedRecordId}, cmdGetRecords model.recordUrl)
+        DeleteSucceed _ -> { model | selectedRecordId = 0} ! [cmdGetRecords model.rpc.fields model.rpc.url.get]
+        --KeyUp keycode ->
+        --        if keycode == enterKeycode && String.length model.newRecordName > 0 then
+        --            ({ model | newRecordName = "" }, cmdPostRecord model.recordUrl model.newRecordName)
+        --        else (model, Cmd.none)
+        SelectRecord recordId -> {model | selectedRecordId = Maybe.withDefault 0 recordId} ! [Cmd.none]
+        --    (
+        --        { model | prevSelectedRecordId = model.selectedRecordId, selectedRecordId = recordId
+        --        }
+        --        , Cmd.none
+        --    )
+        DeleteKey ->
+            (model, cmdDeleteRecord model.rpc.url.set model.selectedRecordId)
+        NoOp ->
+            (model, Cmd.none)
 
 
 view : Model -> Html Msg
@@ -193,6 +194,11 @@ view model =
                 fldMap = List.map2 (\name val -> (name, val)) fldnames record
             in
                 List.map overlayMaster fldMap
+
+        getRecordId : Record -> Maybe Int
+        getRecordId record = List.head record |> Maybe.withDefault "" |> String.toInt |> Result.toMaybe
+
+        tdStyle selected = if selected then style [("border", "1px solid black")] else style []
     in
         div []
             [ table []
@@ -200,7 +206,14 @@ view model =
                     ( tr [] (List.map (\header -> th [] [text header]) tableHeaders) 
                         :: List.map
                             (\record -> 
-                                tr [] (List.map (\str -> td [] [text str]) (overlayMasters record)) )
+                                tr 
+                                    [onClick (getRecordId record |> SelectRecord)] 
+                                    ( List.map 
+                                        (\str -> 
+                                            td [tdStyle ((getRecordId record |> Maybe.withDefault 0) == model.selectedRecordId)] [text str]) 
+                                        (overlayMasters record)
+                                    ) 
+                            )
                             model.records 
                     )
                     [ tr []
@@ -218,6 +231,7 @@ view model =
             , button [onClick ButtonClick] [text "new record"]
             , div [] (List.map (\m -> p [] [text (toString m.items)]) masters)
             , div [] [text ( toString model.records) ]
+            , div [] [text (toString model.selectedRecordId)]
             --, p [] [ jsonifyRecord ["name"] ["niren"] |> toString |> text ]
             --, input (inputAttribs model) []
             --, ul [] (List.map (\record -> li (listItemAttribs record.id) [text record.name]) model.records )
@@ -225,8 +239,7 @@ view model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
-    --Keyboard.ups (\ keycode -> if keycode == deleteKeycode then DeleteKey else OtherKey) 
+    Keyboard.ups (\ keycode -> if keycode == deleteKeycode then DeleteKey else NoOp) 
 
 inputAttribs model =
     [ placeholder "Create new item..."
@@ -236,9 +249,9 @@ inputAttribs model =
     , autofocus True
     ]
 
---onKeyUp : (Int -> msg) -> Attribute msg
---onKeyUp tagger =
---  on "keyup" (Json.Decode.map tagger keyCode)
+onKeyUp : (Int -> msg) -> Attribute msg
+onKeyUp tagger =
+  on "keyup" (Json.Decode.map tagger keyCode)
 
 
 --cmdGetRecords : String -> Cmd Msg
@@ -300,21 +313,18 @@ cmdPostRecord : String -> List Field -> Cmd Msg
 cmdPostRecord url fields =
     Task.perform PostFail PostSucceed (postRecord url fields)
 
-
-
-
-
---deleteRecord url recordId =
---    Http.send Http.defaultSettings
---        { verb = "DELETE"
---        , headers = [("Content-Type", "application/json")]
---        , url = url
---        , body = Http.string ""
---        }
-
---cmdDeleteRecord : String -> Int -> Cmd Msg
---cmdDeleteRecord url recordId =
---    Task.perform PostFail DeleteSucceed (deleteRecord url recordId)
+cmdDeleteRecord : String -> Int -> Cmd Msg
+cmdDeleteRecord url recordId =
+    let 
+        deleteRecord url recordId =
+            Http.send Http.defaultSettings
+                { verb = "DELETE"
+                , headers = [("Content-Type", "application/json")]
+                , url = url ++ "?id=eq." ++ toString recordId
+                , body = Http.string ""
+                }
+    in
+        Task.perform PostFail DeleteSucceed (deleteRecord url recordId)
 
 -- return the record in the list that follows the record with the given recordId 
 nextRecordId records recordId = 

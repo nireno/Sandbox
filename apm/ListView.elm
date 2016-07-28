@@ -87,6 +87,8 @@ type alias Field =
     , hasMaster: Bool
     }
 
+fieldTemplate = {name="", value="", prettyName="", encoder=Json.Encode.string, editable=True, hasMaster=False}
+
 type alias MasterField = 
     { field: String
     , url: String

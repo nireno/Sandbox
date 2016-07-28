@@ -63,6 +63,7 @@ type Msg
   | SelectRecord (Maybe Int)
   | DeleteSucceed Http.Response
   | DeleteKey
+  | EnterKey
   | NoOp
 
 type alias Model =
@@ -130,6 +131,8 @@ update action model =
         --    )
         DeleteKey ->
             (model, cmdDeleteRecord model.rpc.url.set model.selectedRecordId)
+        EnterKey -> 
+            (model, cmdPostRecord model.rpc.url.set model.rpc.fields)
         NoOp ->
             (model, Cmd.none)
 
@@ -239,7 +242,12 @@ view model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Keyboard.ups (\ keycode -> if keycode == deleteKeycode then DeleteKey else NoOp) 
+    let tagger keycode =
+        if keycode == deleteKeycode then DeleteKey 
+        else if keycode == enterKeycode then EnterKey
+        else NoOp
+    in 
+    Keyboard.ups tagger
 
 inputAttribs model =
     [ placeholder "Create new item..."

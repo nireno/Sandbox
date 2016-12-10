@@ -1,0 +1,27 @@
+Currently requires pup: https://github.com/ericchiang/pup
+to be (manually) installed in the same directory.
+
+Inputs:
+- Make and Model of vehicle
+- Highest and Lowest price
+
+Example:
+./geturls -l 75000 -h 120000 -k Toyota -m Corolla
+
+Process:
+- Use inputs to run a search on a local website where people post used cars for sale.
+
+Outputs:
+Generates out.csv containing data like:
+id		age	make	model			year	km		price	transmission
+78191	PDC	Toyota	Corolla Axio	2008	60000	77000	Automatic
+79017	PCF	Toyota	Corolla (Local)	2007	84000	85000	Automatic
+79019	PCH	Toyota	Corolla			2007	124700	106000	Automatic
+79206	PCW	Toyota	Corolla			2006	77000	75000	Automatic
+79799	PCF	Toyota	Corolla			2007			100000	Automatic
+80159	PCR	Toyota	Corolla			2011	120000	120000	Automatic
+
+
+
+
+

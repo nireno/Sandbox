@@ -1,0 +1,15 @@
+Topics
+<%= link to: topic_path(@conn, :new), class: "btn btn-primary"	 do %>
+new
+<% end %>
+
+<ul>
+<%= for topic <- @topics do %>
+	<li>
+		<%= link to: topic_path(@conn, :edit, topic) do %>
+			<%=topic.title%>
+		<%= end %>
+	</li>
+<%= end %>
+</ul>
+

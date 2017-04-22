@@ -6,7 +6,7 @@ Inputs:
 - Highest and Lowest price
 
 Example:
-./geturls -l 75000 -h 120000 -k Toyota -m Corolla
+./geturls.sh -l 75000 -h 120000 -k Toyota -m Corolla
 
 Process:
 - Use inputs to run a search on a local website where people post used cars for sale.

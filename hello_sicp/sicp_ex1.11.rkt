@@ -1,11 +1,17 @@
 #lang sicp
 
-(define (f x) 
-  (if (< x 3) x
-      (f-iter 1 2 3 3 x)))
+(define (f-rec n)
+  (cond ((< n 3) n)
+        (else (+ (f-rec (- n 1))
+                 (* 2 (f-rec (- n 2)))
+                 (* 3 (f-rec (- n 3)))))))
+
+
+(define (f n) 
+  (if (< n 3) n
+      (f-iter 0 1 2 3 n)))
   
-
-(define (f-iter n1 n2 acc i x)
-  (cond ((= i x) acc)
-        (else (f-iter n2 acc (+ n1 n2 acc) (inc i) x))))
-
+(define (f-iter fi-3 fi-2 fi-1 i n)
+  (define fi (+ fi-1 (* 2 fi-2) (* 3 fi-3)))
+  (cond ((= i n) fi)
+        (else (f-iter fi-2 fi-1 fi (inc i) n))))
